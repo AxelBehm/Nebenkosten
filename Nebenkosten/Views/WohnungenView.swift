@@ -532,9 +532,10 @@ private struct AddWohnungSheet: View {
     @ViewBuilder
     private var wohnungSection: some View {
         Section {
-            TextField("Wohnungs-Nummer", text: $wohnungsnummer)
-                .disabled(istGesperrt && isEdit)
-                .onChange(of: wohnungsnummer) { oldValue, newValue in
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                TextField("Nr.", text: $wohnungsnummer)
+                    .disabled(istGesperrt && isEdit)
+                    .onChange(of: wohnungsnummer) { oldValue, newValue in
                             // Validierung: Prüfe, ob die Nummer größer als die Anzahl der Wohnungen ist
                             let trimmedNummer = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                             if !trimmedNummer.isEmpty, let nummerInt = Int(trimmedNummer) {
@@ -567,11 +568,20 @@ private struct AddWohnungSheet: View {
                                 }
                             }
                         }
+                Text("Whng.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             TextField("z.B. Wohnung 1, 1. OG links", text: $bezeichnung)
                 .disabled(istGesperrt && isEdit)
-            TextField("m²", text: $qm)
-                .keyboardType(.numberPad)
-                .disabled(istGesperrt && isEdit)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                TextField("m²", text: $qm)
+                    .keyboardType(.numberPad)
+                    .disabled(istGesperrt && isEdit)
+                Text("qm")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         } header: {
             HStack(spacing: 6) {
                 Image(systemName: "building.2")
