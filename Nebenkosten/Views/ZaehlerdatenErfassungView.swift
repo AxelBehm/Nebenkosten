@@ -114,18 +114,18 @@ private struct ZaehlerdatenWohnungRow: View {
                         .foregroundStyle(.secondary)
                 }
                 if !mietzeitraeume.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         ForEach(mietzeitraeume) { m in
-                            HStack(spacing: 4) {
+                            VStack(alignment: .leading, spacing: 1) {
                                 Text(m.hauptmieterName)
                                     .font(.subheadline)
                                     .foregroundStyle(.primary)
-                                if let von = isoToDeDatum(m.vonDatum), let bis = isoToDeDatum(m.bisDatum) {
-                                    Text("(\(von)–\(bis))")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                if m.anzahlPersonen > 1 {
+                                HStack(spacing: 4) {
+                                    if let von = isoToDeDatum(m.vonDatum), let bis = isoToDeDatum(m.bisDatum) {
+                                        Text("(\(von)–\(bis)")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                     Text("· \(m.anzahlPersonen) Pers.")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
