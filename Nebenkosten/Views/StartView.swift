@@ -574,8 +574,12 @@ struct StartView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddDialog) { addAbrechnungSheetContent }
-        .sheet(isPresented: $showEditDialog) { editAbrechnungSheetContent }
+        .fullScreenCover(isPresented: $showAddDialog) {
+            addAbrechnungSheetContent
+        }
+        .fullScreenCover(isPresented: $showEditDialog) {
+            editAbrechnungSheetContent
+        }
         .alert("Kein Haus ausgewählt", isPresented: $showAbrechnungAlert) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -595,12 +599,12 @@ struct StartView: View {
                 Text(erfolg)
             }
         }
-        .sheet(isPresented: $showEinzelnachweisErfassung) {
+        .fullScreenCover(isPresented: $showEinzelnachweisErfassung) {
             if let haus = selectedAbrechnung {
                 EinzelnachweisErfassungView(abrechnung: haus)
             }
         }
-        .sheet(isPresented: $showAbrechnungsForm) {
+        .fullScreenCover(isPresented: $showAbrechnungsForm) {
             if let haus = selectedAbrechnung {
                 NavigationStack {
                     AbrechnungsFormView(abrechnung: haus)
@@ -614,7 +618,7 @@ struct StartView: View {
                 }
             }
         }
-        .sheet(isPresented: $showEinstellungen) {
+        .fullScreenCover(isPresented: $showEinstellungen) {
             EinstellungenView(onMusterhausCreated: {
                 hausAbrechnungen = DatabaseManager.shared.getAll()
                 let jahr = Calendar.current.component(.year, from: Date()) - 1
@@ -624,7 +628,7 @@ struct StartView: View {
                 showEinstellungen = false
             })
         }
-        .sheet(isPresented: $showUpgrade) {
+        .fullScreenCover(isPresented: $showUpgrade) {
             UpgradeView()
         }
         .alert("Limit erreicht", isPresented: $showLimitError) {
@@ -676,6 +680,7 @@ struct StartView: View {
                     .font(.headline)
             }
         }
+        .scrollIndicators(.visible)
     }
     
     private func fillFormAndShowEdit(_ abrechnung: HausAbrechnung) {

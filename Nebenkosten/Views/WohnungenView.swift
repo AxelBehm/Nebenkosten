@@ -184,6 +184,7 @@ struct WohnungenView: View {
                         #endif
                     }
                 }
+                .scrollIndicators(.visible)
             }
         }
         .navigationTitle("Wohnungen – Übersicht")
@@ -226,7 +227,7 @@ struct WohnungenView: View {
                 }
             }
         }
-        .sheet(isPresented: $showAddWohnung) {
+        .fullScreenCover(isPresented: $showAddWohnung) {
             AddWohnungSheet(
                 abrechnung: abrechnung,
                 wohnung: editingWohnung,
@@ -267,7 +268,7 @@ struct WohnungenView: View {
                 }
             )
         }
-        .sheet(isPresented: $showUpgrade) {
+        .fullScreenCover(isPresented: $showUpgrade) {
             UpgradeView()
         }
         .alert("Limit erreicht", isPresented: $showLimitError) {
@@ -443,7 +444,7 @@ private struct AddWohnungSheet: View {
                 }
                 istGesperrt = istJahrGesperrt(abrechnung: abrechnung)
             }
-            .sheet(isPresented: $showAddMietzeitraum) {
+            .fullScreenCover(isPresented: $showAddMietzeitraum) {
                 mietzeitraumSheet
             }
             .alert("Validierungsfehler", isPresented: $showValidierungsFehler) {

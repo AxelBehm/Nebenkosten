@@ -117,6 +117,7 @@ struct ZaehlerstaendeView: View {
                 Text("Der Start-Wert wird automatisch vom Vormieter übernommen, falls vorhanden.")
             }
         }
+        .scrollIndicators(.visible)
         .navigationTitle("Zählerstände")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -145,7 +146,7 @@ struct ZaehlerstaendeView: View {
                 .disabled(istGesperrt)
             }
         }
-        .sheet(isPresented: $showAddZaehlerstand) {
+        .fullScreenCover(isPresented: $showAddZaehlerstand) {
             AddZaehlerstandSheet(
                 wohnung: wohnung,
                 editingZaehlerstand: editingZaehlerstand,

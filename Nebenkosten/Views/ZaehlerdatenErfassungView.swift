@@ -56,6 +56,7 @@ struct ZaehlerdatenErfassungView: View {
                         }
                     }
                 }
+                .scrollIndicators(.visible)
             }
         }
         .navigationTitle("Zählerdaten \(abrechnung.abrechnungsJahr)")

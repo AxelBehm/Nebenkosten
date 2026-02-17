@@ -145,7 +145,7 @@ struct WohnungDetailView: View {
     
     private var contentWithMitmieterSheet: some View {
         contentWithNav
-            .sheet(isPresented: $showAddMitmieter) {
+            .fullScreenCover(isPresented: $showAddMitmieter) {
                 AddMitmieterSheet(
                     istGesperrt: istGesperrt,
                     name: $mitmieterName,
@@ -179,7 +179,7 @@ struct WohnungDetailView: View {
     @ViewBuilder
     private var rootContent: some View {
         contentWithMitmieterSheet
-            .sheet(item: $mietzeitraumSheetItem) { item in
+            .fullScreenCover(item: $mietzeitraumSheetItem) { item in
             AddMietzeitraumSheetWithFotos(
                 istGesperrt: istGesperrt,
                 hauptmieterName: wohnung.name ?? "",

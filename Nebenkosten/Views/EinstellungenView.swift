@@ -53,6 +53,7 @@ struct EinstellungenView: View {
                     }
                 }
             }
+            .scrollIndicators(.visible)
             .navigationTitle("Einstellungen")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

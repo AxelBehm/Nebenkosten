@@ -31,6 +31,7 @@ struct KostenView: View {
         List {
             kostenSection
         }
+        .scrollIndicators(.visible)
         .navigationTitle("Kosten")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
@@ -47,7 +48,7 @@ struct KostenView: View {
                 addKostenButton
             }
         }
-        .sheet(isPresented: $showAddKosten) {
+        .fullScreenCover(isPresented: $showAddKosten) {
             AddKostenSheet(
                 abrechnung: abrechnung,
                 istGesperrt: istGesperrt,
