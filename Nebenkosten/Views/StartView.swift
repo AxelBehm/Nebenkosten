@@ -962,8 +962,9 @@ struct AddAbrechnungView: View {
                             }
                             .onChange(of: gesamtflaeche) { oldValue, newValue in
                                 if let value = newValue {
-                                    gesamtflaecheText = String(value)
-                                } else if gesamtflaecheText.isEmpty == false {
+                                    let str = String(value)
+                                    if gesamtflaecheText != str { gesamtflaecheText = str }
+                                } else if !gesamtflaecheText.isEmpty {
                                     gesamtflaecheText = ""
                                 }
                             }
@@ -984,8 +985,9 @@ struct AddAbrechnungView: View {
                             }
                             .onChange(of: anzahlWohnungen) { oldValue, newValue in
                                 if let value = newValue {
-                                    anzahlWohnungenText = String(value)
-                                } else if anzahlWohnungenText.isEmpty == false {
+                                    let str = String(value)
+                                    if anzahlWohnungenText != str { anzahlWohnungenText = str }
+                                } else if !anzahlWohnungenText.isEmpty {
                                     anzahlWohnungenText = ""
                                 }
                             }
@@ -1136,7 +1138,6 @@ struct AddAbrechnungView: View {
                 }
             }
             .onAppear {
-                isHausFocused = true
                 if let flaeche = gesamtflaeche {
                     gesamtflaecheText = String(flaeche)
                 } else {
@@ -1148,7 +1149,14 @@ struct AddAbrechnungView: View {
                     anzahlWohnungenText = ""
                 }
                 if let key = hausBezeichnungForFotos, !key.isEmpty {
-                    hausFotos = DatabaseManager.shared.getHausFotos(byHausBezeichnung: key)
+                    Task {
+                        let fotos = DatabaseManager.shared.getHausFotos(byHausBezeichnung: key)
+                        await MainActor.run { hausFotos = fotos }
+                    }
+                }
+                // Fokus verzögern, damit Form zuerst rendert – reduziert Trägheit beim ersten Tippen
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    isHausFocused = true
                 }
             }
         }

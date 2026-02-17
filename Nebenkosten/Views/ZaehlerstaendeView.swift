@@ -377,69 +377,70 @@ private struct AddZaehlerstandSheet: View {
             .onAppear {
                 #if os(iOS)
                 if let z = editingZaehlerstand {
-                    zaehlerstandFotos = DatabaseManager.shared.getZaehlerstandFotos(byZaehlerstandId: z.id)
+                    Task {
+                        let fotos = DatabaseManager.shared.getZaehlerstandFotos(byZaehlerstandId: z.id)
+                        await MainActor.run { zaehlerstandFotos = fotos }
+                    }
                 }
                 #endif
-                // Wenn ein neuer Zählerstand angelegt wird, versuche Start-Wert vom Vormieter zu holen
-                // Nur wenn noch keine Zählerstände für diese Wohnung existieren (d.h. nur beim ersten Zählerstand)
                 if !isEdit && zaehlerStartText.isEmpty {
-                    // Prüfe, ob bereits Zählerstände für diese Wohnung existieren
-                    let alleZaehlerstaende = DatabaseManager.shared.getZaehlerstaende(byWohnungId: wohnung.id)
-                    
-                    // Nur wenn noch keine Zählerstände existieren, versuche Startwert vom Vormieter zu holen
-                    if alleZaehlerstaende.isEmpty {
+                    Task {
+                        let alleZaehlerstaende = DatabaseManager.shared.getZaehlerstaende(byWohnungId: wohnung.id)
+                        guard alleZaehlerstaende.isEmpty else { return }
                         let nummer = zaehlerNummerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : zaehlerNummerText.trimmingCharacters(in: .whitespacesAndNewlines)
                         if let letzterZaehlerstand = DatabaseManager.shared.getLetzterZaehlerstand(
                             wohnungId: wohnung.id,
                             zaehlerTyp: zaehlerTyp,
                             zaehlerNummer: nummer
                         ) {
-                            zaehlerStartText = String(format: "%.2f", letzterZaehlerstand.zaehlerEnde)
+                            await MainActor.run {
+                                zaehlerStartText = String(format: "%.2f", letzterZaehlerstand.zaehlerEnde)
+                            }
                         }
                     }
                 }
             }
             .onChange(of: zaehlerTyp) { oldValue, newValue in
-                // Wenn der Typ geändert wird, versuche Start-Wert vom Vormieter zu holen
-                // Nur wenn noch keine Zählerstände für diese Wohnung existieren
                 if !isEdit && !newValue.isEmpty {
-                    let alleZaehlerstaende = DatabaseManager.shared.getZaehlerstaende(byWohnungId: wohnung.id)
-                    
-                    if alleZaehlerstaende.isEmpty {
+                    Task {
+                        let alleZaehlerstaende = DatabaseManager.shared.getZaehlerstaende(byWohnungId: wohnung.id)
                         let nummer = zaehlerNummerText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : zaehlerNummerText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if let letzterZaehlerstand = DatabaseManager.shared.getLetzterZaehlerstand(
+                        let start: String
+                        if alleZaehlerstaende.isEmpty,
+                           let letzterZaehlerstand = DatabaseManager.shared.getLetzterZaehlerstand(
                             wohnungId: wohnung.id,
                             zaehlerTyp: newValue,
                             zaehlerNummer: nummer
-                        ) {
-                            zaehlerStartText = String(format: "%.2f", letzterZaehlerstand.zaehlerEnde)
+                           ) {
+                            start = String(format: "%.2f", letzterZaehlerstand.zaehlerEnde)
                         } else {
-                            zaehlerStartText = ""
+                            start = ""
                         }
-                    } else {
-                        zaehlerStartText = ""
+                        await MainActor.run { zaehlerStartText = start }
                     }
                 }
             }
             .onChange(of: zaehlerNummerText) { oldValue, newValue in
-                // Wenn die Nummer geändert wird, versuche Start-Wert vom Vormieter zu holen
-                // Nur wenn noch keine Zählerstände für diese Wohnung existieren
                 if !isEdit && !zaehlerTyp.isEmpty {
-                    let alleZaehlerstaende = DatabaseManager.shared.getZaehlerstaende(byWohnungId: wohnung.id)
-                    
-                    if alleZaehlerstaende.isEmpty {
-                        let nummer = newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if let letzterZaehlerstand = DatabaseManager.shared.getLetzterZaehlerstand(
+                    let typ = zaehlerTyp
+                    let nummer = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    Task {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        guard zaehlerNummerText.trimmingCharacters(in: .whitespacesAndNewlines) == nummer else { return }
+                        let alleZaehlerstaende = DatabaseManager.shared.getZaehlerstaende(byWohnungId: wohnung.id)
+                        let nummerOpt = nummer.isEmpty ? nil : nummer
+                        let start: String
+                        if alleZaehlerstaende.isEmpty,
+                           let letzterZaehlerstand = DatabaseManager.shared.getLetzterZaehlerstand(
                             wohnungId: wohnung.id,
-                            zaehlerTyp: zaehlerTyp,
-                            zaehlerNummer: nummer
-                        ) {
-                            zaehlerStartText = String(format: "%.2f", letzterZaehlerstand.zaehlerEnde)
+                            zaehlerTyp: typ,
+                            zaehlerNummer: nummerOpt
+                           ) {
+                            start = String(format: "%.2f", letzterZaehlerstand.zaehlerEnde)
                         } else {
-                            zaehlerStartText = ""
+                            start = ""
                         }
-                    } else {
-                        zaehlerStartText = ""
+                        await MainActor.run { zaehlerStartText = start }
                     }
                 }
             }

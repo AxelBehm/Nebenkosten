@@ -439,10 +439,17 @@ private struct AddWohnungSheet: View {
             }
             .navigationTitle(isEdit ? "Wohnung bearbeiten" : "Neue Wohnung")
             .onAppear {
-                if isEdit, let w = wohnung {
-                    loadMietzeitraeume(wohnungId: w.id)
-                }
                 istGesperrt = istJahrGesperrt(abrechnung: abrechnung)
+                if isEdit, let w = wohnung {
+                    Task {
+                        let mietz = DatabaseManager.shared.getMietzeitraeume(byWohnungId: w.id)
+                        let fotos = Dictionary(uniqueKeysWithValues: mietz.map { ($0.id, DatabaseManager.shared.getMietzeitraumFotos(byMietzeitraumId: $0.id)) })
+                        await MainActor.run {
+                            mietzeitraeume = mietz
+                            mietzeitraumFotosByMietzeitraum = fotos
+                        }
+                    }
+                }
             }
             .fullScreenCover(isPresented: $showAddMietzeitraum) {
                 mietzeitraumSheet
@@ -540,34 +547,32 @@ private struct AddWohnungSheet: View {
                 TextField("Nr.", text: $wohnungsnummer)
                     .disabled(istGesperrt && isEdit)
                     .onChange(of: wohnungsnummer) { oldValue, newValue in
-                            // Validierung: Prüfe, ob die Nummer größer als die Anzahl der Wohnungen ist
                             let trimmedNummer = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                            // Validierung: Prüfe, ob die Nummer größer als die Anzahl der Wohnungen ist (ohne DB)
                             if !trimmedNummer.isEmpty, let nummerInt = Int(trimmedNummer) {
                                 if let maxAnzahl = abrechnung.anzahlWohnungen, nummerInt > maxAnzahl {
                                     validierungsFehler = "Die Wohnungsnummer \(nummerInt) ist größer als die im Haus hinterlegte Anzahl der Wohnungen (\(maxAnzahl))."
                                     showValidierungsFehler = true
-                                    // Setze die Nummer zurück auf den alten Wert
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                         wohnungsnummer = oldValue
                                     }
                                     return
                                 }
                             }
-                            
-                            // Wenn eine neue Wohnung angelegt wird (nicht bearbeitet) und eine Nummer eingegeben wird
-                            if !isEdit && !newValue.isEmpty {
-                                // Prüfe, ob eine Wohnung mit dieser Nummer bereits existiert
-                                if !trimmedNummer.isEmpty,
-                                   let vorhandeneWohnung = DatabaseManager.shared.getWohnung(
-                                    byWohnungsnummer: trimmedNummer,
-                                    hausAbrechnungId: abrechnung.id
-                                ) {
-                                    // Übernehme qm und bezeichnung nur wenn die Felder leer sind
-                                    if qm.isEmpty {
-                                        qm = String(vorhandeneWohnung.qm)
-                                    }
-                                    if bezeichnung.isEmpty {
-                                        bezeichnung = vorhandeneWohnung.bezeichnung
+                            // DB-Lookup für Auto-Fill: debounced, um Tippen nicht zu blockieren
+                            if !isEdit && !trimmedNummer.isEmpty {
+                                Task {
+                                    try? await Task.sleep(nanoseconds: 400_000_000)
+                                    let aktuell = wohnungsnummer.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    guard aktuell == trimmedNummer else { return }
+                                    if let vorhandeneWohnung = DatabaseManager.shared.getWohnung(
+                                        byWohnungsnummer: trimmedNummer,
+                                        hausAbrechnungId: abrechnung.id
+                                    ) {
+                                        await MainActor.run {
+                                            if qm.isEmpty { qm = String(vorhandeneWohnung.qm) }
+                                            if bezeichnung.isEmpty { bezeichnung = vorhandeneWohnung.bezeichnung }
+                                        }
                                     }
                                 }
                             }

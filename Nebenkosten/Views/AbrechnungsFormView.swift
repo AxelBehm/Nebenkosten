@@ -904,35 +904,12 @@ struct AbrechnungsFormView: View {
     private func loadData() {
         wohnungen = DatabaseManager.shared.getWohnungen(byHausAbrechnungId: abrechnung.id)
         kosten = DatabaseManager.shared.getKosten(byHausAbrechnungId: abrechnung.id)
-        
-        // DEBUG: Zeige alle Wohnungen mit Nummer 5
-        let wohnungen5 = wohnungen.filter { $0.wohnungsnummer == "5" }
-        if !wohnungen5.isEmpty {
-            print("=== DEBUG: Wohnungen mit Nummer 5 ===")
-            for w in wohnungen5 {
-                print("Wohnung ID: \(w.id), Nummer: \(w.wohnungsnummer ?? "keine")")
-            }
-        }
-        
-        // Lade Mietzeiträume, Mitmieter und Zählerstände für jede Wohnung
         for wohnung in wohnungen {
             let mietzeitraeumeFuerWohnung = DatabaseManager.shared.getMietzeitraeume(byWohnungId: wohnung.id)
             mietzeitraeume[wohnung.id] = mietzeitraeumeFuerWohnung
-            
-            // DEBUG: Zeige Mietzeiträume für Wohnung 5
-            if wohnung.wohnungsnummer == "5" {
-                print("=== DEBUG: Mietzeiträume für Wohnung 5 (ID: \(wohnung.id)) ===")
-                print("Anzahl: \(mietzeitraeumeFuerWohnung.count)")
-                for m in mietzeitraeumeFuerWohnung {
-                    print("  Mietzeitraum ID: \(m.id), von: \(m.vonDatum), bis: \(m.bisDatum), Mieter: \(m.hauptmieterName)")
-                }
-            }
-            
-            // Lade Mitmieter für jeden Mietzeitraum
             for mietzeitraum in mietzeitraeumeFuerWohnung {
                 mitmieter[mietzeitraum.id] = DatabaseManager.shared.getMitmieter(byMietzeitraumId: mietzeitraum.id)
             }
-            
             zaehlerstaende[wohnung.id] = DatabaseManager.shared.getZaehlerstaende(byWohnungId: wohnung.id)
         }
     }

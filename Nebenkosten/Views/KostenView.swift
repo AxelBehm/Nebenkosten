@@ -339,7 +339,10 @@ private struct AddKostenSheet: View {
             .onAppear {
                 #if os(iOS)
                 if let k = kosten {
-                    kostenFotos = DatabaseManager.shared.getKostenFotos(byKostenId: k.id)
+                    Task {
+                        let fotos = DatabaseManager.shared.getKostenFotos(byKostenId: k.id)
+                        await MainActor.run { kostenFotos = fotos }
+                    }
                 }
                 #endif
             }
