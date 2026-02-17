@@ -533,6 +533,9 @@ private struct AddWohnungSheet: View {
     private var wohnungSection: some View {
         Section {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("Whng.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 TextField("Nr.", text: $wohnungsnummer)
                     .disabled(istGesperrt && isEdit)
                     .onChange(of: wohnungsnummer) { oldValue, newValue in
@@ -568,19 +571,16 @@ private struct AddWohnungSheet: View {
                                 }
                             }
                         }
-                Text("Whng.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             TextField("z.B. Wohnung 1, 1. OG links", text: $bezeichnung)
                 .disabled(istGesperrt && isEdit)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                TextField("m²", text: $qm)
-                    .keyboardType(.numberPad)
-                    .disabled(istGesperrt && isEdit)
                 Text("qm")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                TextField("m²", text: $qm)
+                    .keyboardType(.numberPad)
+                    .disabled(istGesperrt && isEdit)
             }
         } header: {
             HStack(spacing: 6) {
