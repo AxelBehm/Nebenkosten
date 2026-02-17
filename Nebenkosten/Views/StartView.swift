@@ -486,7 +486,7 @@ struct StartView: View {
                         }, onImportSuccess: {
                             hausAbrechnungen = DatabaseManager.shared.getAll()
                         })) {
-                            Label("System", systemImage: "gearshape")
+                            Label("System", systemImage: "gearshape.2")
                         }
                         Button(action: {
                             showEinstellungen = true
@@ -699,28 +699,6 @@ struct StartView: View {
     
     private var actionButtonsSection: some View {
         HStack(spacing: 12) {
-            NavigationLink(destination: SystemFunktionenView(selectedAbrechnung: selectedAbrechnung, onAbrechnungDeleted: {
-                hausAbrechnungen = DatabaseManager.shared.getAll()
-                if selectedAbrechnung != nil { selectedAbrechnung = nil }
-                navigationPath = NavigationPath()
-            }, onJahreswechselErfolgreich: {
-                hausAbrechnungen = DatabaseManager.shared.getAll()
-            }, onDatabaseReset: {
-                hausAbrechnungen = DatabaseManager.shared.getAll()
-                selectedAbrechnung = nil
-                navigationPath = NavigationPath()
-            }, onImportSuccess: {
-                hausAbrechnungen = DatabaseManager.shared.getAll()
-            })) {
-                VStack(spacing: 4) {
-                    AppSymbol(systemName: "gearshape", backgroundColor: .appGray)
-                    Text("System")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
             Spacer()
             if let haus = selectedAbrechnung {
                 NavigationLink(destination: WohnungenView(abrechnung: haus)) {
