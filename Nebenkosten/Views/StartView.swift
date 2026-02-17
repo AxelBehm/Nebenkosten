@@ -271,6 +271,13 @@ struct StartView: View {
             }
             .buttonStyle(.borderedProminent)
             .padding(.top, 8)
+            Button(action: { showEinstellungen = true }) {
+                Text("Muster-Haus über Einstellungen möglich")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
