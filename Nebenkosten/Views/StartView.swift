@@ -1700,6 +1700,7 @@ struct SystemFunktionenView: View {
                             vonDatum: mietzeitraum.vonDatum,
                             bisDatum: mietzeitraum.bisDatum,
                             anzahlPersonen: mietzeitraum.anzahlPersonen,
+                            personenBeschreibung: mietzeitraum.personenBeschreibung,
                             mietendeOption: mietzeitraum.mietendeOption
                         )
                         

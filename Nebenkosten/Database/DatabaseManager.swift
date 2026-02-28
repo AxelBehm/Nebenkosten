@@ -257,7 +257,9 @@ class DatabaseManager {
         let columnsToAdd = [
             ("jahr", "INTEGER"),
             ("anzahlPersonen", "INTEGER"),
-            ("mietendeOption", "TEXT")
+            ("mietendeOption", "TEXT"),
+            ("anzahlPersonenDezimal", "REAL"),
+            ("personenBeschreibung", "TEXT")
         ]
         
         for (columnName, columnType) in columnsToAdd {
@@ -289,6 +291,9 @@ class DatabaseManager {
         // Für bestehende Datensätze: mietendeOption auf mietendeOffen setzen, falls NULL
         let updateMietendeSQL = "UPDATE Mietzeitraum SET mietendeOption = 'mietendeOffen' WHERE mietendeOption IS NULL OR mietendeOption = '';"
         runSQL(updateMietendeSQL)
+        
+        // Migration: anzahlPersonenDezimal aus anzahlPersonen übernehmen
+        runSQL("UPDATE Mietzeitraum SET anzahlPersonenDezimal = anzahlPersonen WHERE anzahlPersonenDezimal IS NULL;")
     }
     
     private func createMitmieterTable() {
@@ -1325,13 +1330,28 @@ class DatabaseManager {
         return opt
     }
     
+    /// Liest anzahlPersonen aus DB: anzahlPersonenDezimal (col 8) wenn vorhanden, sonst anzahlPersonen (col 6).
+    private static func anzahlPersonenFromDB(_ stmt: OpaquePointer?, dezimalCol: Int32 = 8, intCol: Int32 = 6) -> Double {
+        if sqlite3_column_count(stmt) > dezimalCol, sqlite3_column_type(stmt, dezimalCol) != SQLITE_NULL {
+            return sqlite3_column_double(stmt, dezimalCol)
+        }
+        return sqlite3_column_type(stmt, intCol) == SQLITE_NULL ? 1.0 : Double(sqlite3_column_int(stmt, intCol))
+    }
+    
+    private static func personenBeschreibungFromDB(_ stmt: OpaquePointer?, col: Int32 = 9) -> String? {
+        guard sqlite3_column_count(stmt) > col else { return nil }
+        guard let c = sqlite3_column_text(stmt, col) else { return nil }
+        let s = String(cString: c)
+        return s.isEmpty ? nil : s
+    }
+    
     func insertMietzeitraum(_ m: Mietzeitraum) -> Bool {
         // Anschlussmieter nur nach Auszug: keine überlappenden Zeiträume in derselben Wohnung
         if getUeberlappendenMietzeitraum(wohnungId: m.wohnungId, vonDatum: m.vonDatum, bisDatum: m.bisDatum, ausschliessenId: nil) != nil {
             return false
         }
         beginTransaction()
-        let sql = "INSERT INTO Mietzeitraum (wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption) VALUES (?, ?, ?, ?, ?, ?, ?);"
+        let sql = "INSERT INTO Mietzeitraum (wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption, anzahlPersonenDezimal, personenBeschreibung) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);"
         var stmt: OpaquePointer?
         var ok = false
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -1340,8 +1360,14 @@ class DatabaseManager {
             sqlite3_bind_text(stmt, 3, (m.hauptmieterName as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 4, (m.vonDatum as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 5, (m.bisDatum as NSString).utf8String, -1, nil)
-            sqlite3_bind_int(stmt, 6, Int32(m.anzahlPersonen))
+            sqlite3_bind_int(stmt, 6, Int32(round(m.anzahlPersonen)))
             sqlite3_bind_text(stmt, 7, (m.mietendeOption.rawValue as NSString).utf8String, -1, nil)
+            sqlite3_bind_double(stmt, 8, m.anzahlPersonen)
+            if let b = m.personenBeschreibung {
+                sqlite3_bind_text(stmt, 9, (b as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 9)
+            }
             if sqlite3_step(stmt) == SQLITE_DONE { ok = true }
         }
         sqlite3_finalize(stmt)
@@ -1350,7 +1376,7 @@ class DatabaseManager {
     }
     
     func getMietzeitraeume(byWohnungId wohnungId: Int64) -> [Mietzeitraum] {
-        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption FROM Mietzeitraum WHERE wohnungId = ? ORDER BY vonDatum;"
+        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption, anzahlPersonenDezimal, personenBeschreibung FROM Mietzeitraum WHERE wohnungId = ? ORDER BY vonDatum;"
         var stmt: OpaquePointer?
         var list: [Mietzeitraum] = []
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -1363,7 +1389,8 @@ class DatabaseManager {
                     hauptmieterName: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
                     vonDatum: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
                     bisDatum: sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? "",
-                    anzahlPersonen: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? 1 : Int(sqlite3_column_int(stmt, 6)),
+                    anzahlPersonen: Self.anzahlPersonenFromDB(stmt, dezimalCol: 8, intCol: 6),
+                    personenBeschreibung: Self.personenBeschreibungFromDB(stmt, col: 9),
                     mietendeOption: Self.mietendeOptionFromDB(sqlite3_column_text(stmt, 7).map { String(cString: $0) })
                 ))
             }
@@ -1378,7 +1405,7 @@ class DatabaseManager {
             return false
         }
         beginTransaction()
-        let sql = "UPDATE Mietzeitraum SET jahr = ?, hauptmieterName = ?, vonDatum = ?, bisDatum = ?, anzahlPersonen = ?, mietendeOption = ? WHERE id = ?;"
+        let sql = "UPDATE Mietzeitraum SET jahr = ?, hauptmieterName = ?, vonDatum = ?, bisDatum = ?, anzahlPersonen = ?, mietendeOption = ?, anzahlPersonenDezimal = ?, personenBeschreibung = ? WHERE id = ?;"
         var stmt: OpaquePointer?
         var ok = false
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
@@ -1386,9 +1413,15 @@ class DatabaseManager {
             sqlite3_bind_text(stmt, 2, (m.hauptmieterName as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 3, (m.vonDatum as NSString).utf8String, -1, nil)
             sqlite3_bind_text(stmt, 4, (m.bisDatum as NSString).utf8String, -1, nil)
-            sqlite3_bind_int(stmt, 5, Int32(m.anzahlPersonen))
+            sqlite3_bind_int(stmt, 5, Int32(round(m.anzahlPersonen)))
             sqlite3_bind_text(stmt, 6, (m.mietendeOption.rawValue as NSString).utf8String, -1, nil)
-            sqlite3_bind_int64(stmt, 7, m.id)
+            sqlite3_bind_double(stmt, 7, m.anzahlPersonen)
+            if let b = m.personenBeschreibung {
+                sqlite3_bind_text(stmt, 8, (b as NSString).utf8String, -1, nil)
+            } else {
+                sqlite3_bind_null(stmt, 8)
+            }
+            sqlite3_bind_int64(stmt, 9, m.id)
             if sqlite3_step(stmt) == SQLITE_DONE { ok = true }
         }
         sqlite3_finalize(stmt)
@@ -1417,7 +1450,7 @@ class DatabaseManager {
     func getConflictingMietzeitraum(wohnungId: Int64, neuesVonDatum: String, ausschliessenId: Int64? = nil) -> Mietzeitraum? {
         let wohnungIds = getWohnungIdsFuerGleicheWohnung(wohnungId: wohnungId)
         let inPlaceholders = wohnungIds.map { _ in "?" }.joined(separator: ",")
-        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND vonDatum <= ? AND bisDatum >= ?"
+        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption, anzahlPersonenDezimal, personenBeschreibung FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND vonDatum <= ? AND bisDatum >= ?"
         var stmt: OpaquePointer?
         var result: Mietzeitraum? = nil
         
@@ -1441,7 +1474,8 @@ class DatabaseManager {
                     hauptmieterName: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
                     vonDatum: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
                     bisDatum: sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? "",
-                    anzahlPersonen: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? 1 : Int(sqlite3_column_int(stmt, 6)),
+                    anzahlPersonen: Self.anzahlPersonenFromDB(stmt, dezimalCol: 8, intCol: 6),
+                    personenBeschreibung: Self.personenBeschreibungFromDB(stmt, col: 9),
                     mietendeOption: Self.mietendeOptionFromDB(sqlite3_column_text(stmt, 7).map { String(cString: $0) })
                 )
                 break
@@ -1455,7 +1489,7 @@ class DatabaseManager {
     func getVorherigenMietzeitraum(wohnungId: Int64, vorDatum: String, ausschliessenId: Int64? = nil) -> Mietzeitraum? {
         let wohnungIds = getWohnungIdsFuerGleicheWohnung(wohnungId: wohnungId)
         let inPlaceholders = wohnungIds.map { _ in "?" }.joined(separator: ",")
-        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND bisDatum < ? ORDER BY bisDatum DESC LIMIT 1;"
+        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption, anzahlPersonenDezimal, personenBeschreibung FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND bisDatum < ? ORDER BY bisDatum DESC LIMIT 1;"
         var stmt: OpaquePointer?
         var result: Mietzeitraum? = nil
         
@@ -1479,7 +1513,8 @@ class DatabaseManager {
                     hauptmieterName: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
                     vonDatum: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
                     bisDatum: sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? "",
-                    anzahlPersonen: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? 1 : Int(sqlite3_column_int(stmt, 6)),
+                    anzahlPersonen: Self.anzahlPersonenFromDB(stmt, dezimalCol: 8, intCol: 6),
+                    personenBeschreibung: Self.personenBeschreibungFromDB(stmt, col: 9),
                     mietendeOption: Self.mietendeOptionFromDB(sqlite3_column_text(stmt, 7).map { String(cString: $0) })
                 )
             }
@@ -1492,7 +1527,7 @@ class DatabaseManager {
     func getNaechstenMietzeitraum(wohnungId: Int64, nachDatum: String, ausschliessenId: Int64? = nil) -> Mietzeitraum? {
         let wohnungIds = getWohnungIdsFuerGleicheWohnung(wohnungId: wohnungId)
         let inPlaceholders = wohnungIds.map { _ in "?" }.joined(separator: ",")
-        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND vonDatum > ? ORDER BY vonDatum ASC LIMIT 1;"
+        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption, anzahlPersonenDezimal, personenBeschreibung FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND vonDatum > ? ORDER BY vonDatum ASC LIMIT 1;"
         var stmt: OpaquePointer?
         var result: Mietzeitraum? = nil
         
@@ -1516,7 +1551,8 @@ class DatabaseManager {
                     hauptmieterName: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
                     vonDatum: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
                     bisDatum: sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? "",
-                    anzahlPersonen: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? 1 : Int(sqlite3_column_int(stmt, 6)),
+                    anzahlPersonen: Self.anzahlPersonenFromDB(stmt, dezimalCol: 8, intCol: 6),
+                    personenBeschreibung: Self.personenBeschreibungFromDB(stmt, col: 9),
                     mietendeOption: Self.mietendeOptionFromDB(sqlite3_column_text(stmt, 7).map { String(cString: $0) })
                 )
             }
@@ -1527,7 +1563,7 @@ class DatabaseManager {
     
     /// Gibt den letzten Mietzeitraum für eine Wohnung zurück (mit dem spätesten Auszugsdatum)
     func getLetzterMietzeitraum(wohnungId: Int64) -> Mietzeitraum? {
-        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption FROM Mietzeitraum WHERE wohnungId = ? ORDER BY bisDatum DESC LIMIT 1;"
+        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption, anzahlPersonenDezimal, personenBeschreibung FROM Mietzeitraum WHERE wohnungId = ? ORDER BY bisDatum DESC LIMIT 1;"
         var stmt: OpaquePointer?
         var result: Mietzeitraum? = nil
         
@@ -1542,7 +1578,8 @@ class DatabaseManager {
                     hauptmieterName: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
                     vonDatum: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
                     bisDatum: sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? "",
-                    anzahlPersonen: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? 1 : Int(sqlite3_column_int(stmt, 6)),
+                    anzahlPersonen: Self.anzahlPersonenFromDB(stmt, dezimalCol: 8, intCol: 6),
+                    personenBeschreibung: Self.personenBeschreibungFromDB(stmt, col: 9),
                     mietendeOption: Self.mietendeOptionFromDB(sqlite3_column_text(stmt, 7).map { String(cString: $0) })
                 )
             }
@@ -1555,7 +1592,7 @@ class DatabaseManager {
     func getLetzterMietzeitraum(byWohnungsnummer nummer: String, hausAbrechnungId: Int64) -> Mietzeitraum? {
         guard !nummer.isEmpty else { return nil }
         let sql = """
-            SELECT m.id, m.wohnungId, m.jahr, m.hauptmieterName, m.vonDatum, m.bisDatum, m.anzahlPersonen, m.mietendeOption 
+            SELECT m.id, m.wohnungId, m.jahr, m.hauptmieterName, m.vonDatum, m.bisDatum, m.anzahlPersonen, m.mietendeOption, m.anzahlPersonenDezimal, m.personenBeschreibung
             FROM Mietzeitraum m 
             INNER JOIN Wohnung w ON m.wohnungId = w.id 
             WHERE w.hausAbrechnungId = ? AND w.wohnungsnummer = ? 
@@ -1577,7 +1614,8 @@ class DatabaseManager {
                     hauptmieterName: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
                     vonDatum: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
                     bisDatum: sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? "",
-                    anzahlPersonen: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? 1 : Int(sqlite3_column_int(stmt, 6)),
+                    anzahlPersonen: Self.anzahlPersonenFromDB(stmt, dezimalCol: 8, intCol: 6),
+                    personenBeschreibung: Self.personenBeschreibungFromDB(stmt, col: 9),
                     mietendeOption: Self.mietendeOptionFromDB(sqlite3_column_text(stmt, 7).map { String(cString: $0) })
                 )
             }
@@ -1591,7 +1629,7 @@ class DatabaseManager {
         let wohnungIds = getWohnungIdsFuerGleicheWohnung(wohnungId: wohnungId)
         let inPlaceholders = wohnungIds.map { _ in "?" }.joined(separator: ",")
         // Überlappung: vonDatum1 <= bisDatum2 AND bisDatum1 >= vonDatum2
-        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND vonDatum <= ? AND bisDatum >= ?"
+        let sql = "SELECT id, wohnungId, jahr, hauptmieterName, vonDatum, bisDatum, anzahlPersonen, mietendeOption, anzahlPersonenDezimal, personenBeschreibung FROM Mietzeitraum WHERE wohnungId IN (\(inPlaceholders)) AND vonDatum <= ? AND bisDatum >= ?"
         var stmt: OpaquePointer?
         var result: Mietzeitraum? = nil
         
@@ -1615,7 +1653,8 @@ class DatabaseManager {
                     hauptmieterName: sqlite3_column_text(stmt, 3).map { String(cString: $0) } ?? "",
                     vonDatum: sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? "",
                     bisDatum: sqlite3_column_text(stmt, 5).map { String(cString: $0) } ?? "",
-                    anzahlPersonen: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? 1 : Int(sqlite3_column_int(stmt, 6)),
+                    anzahlPersonen: Self.anzahlPersonenFromDB(stmt, dezimalCol: 8, intCol: 6),
+                    personenBeschreibung: Self.personenBeschreibungFromDB(stmt, col: 9),
                     mietendeOption: Self.mietendeOptionFromDB(sqlite3_column_text(stmt, 7).map { String(cString: $0) })
                 )
                 break

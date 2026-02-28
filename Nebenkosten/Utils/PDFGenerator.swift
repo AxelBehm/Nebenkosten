@@ -30,6 +30,24 @@ private func isoToDate(_ s: String) -> Date? {
     return dateFormatter.date(from: s)
 }
 
+private func formatPersonentagePDF(_ wert: Double) -> String {
+    if wert == floor(wert) { return "\(Int(wert))" }
+    return String(format: "%.1f", wert).replacingOccurrences(of: ".", with: ",")
+}
+
+private func formatPersonenAnzahlPDF(_ wert: Double) -> String {
+    if wert == floor(wert) { return "\(Int(wert))" }
+    return String(format: "%.1f", wert).replacingOccurrences(of: ".", with: ",")
+}
+
+/// Einheit für Anzeige: ganze Zahl → Person/Personen, Dezimal → Personenanteil
+private func personenEinheitAnzeigePDF(_ wert: Double) -> String {
+    if wert == floor(wert) {
+        return wert == 1 ? "Person" : "Personen"
+    }
+    return "Personenanteil"
+}
+
 struct PDFGenerator {
     static func generateAbrechnungPDF(
         haus: HausAbrechnung,
@@ -38,11 +56,11 @@ struct PDFGenerator {
         mitmieter: [Int64: [Mitmieter]],
         zaehlerstaende: [Zaehlerstand],
         kosten: [Kosten],
-        gesamtPersonentage: Int,
+        gesamtPersonentage: Double,
         gesamtQm: Int,
         gesamtVerbrauch: [String: Double],
         anzahlWohnungen: Int,
-        personentageWohnung: Int,
+        personentageWohnung: Double,
         verbrauchWohnung: [String: Double],
         tageWohnung: Int,
         jahresTage: Int,
@@ -280,12 +298,12 @@ struct PDFGenerator {
         
         // Gesamtmiettage
         let gesamtLeerstandTage = alleLeerstaende.reduce(0) { $0 + $1.tage }
-        let gesamtPersonentage = alleMietzeitraeume.reduce(0) { sum, m in
+        let gesamtPersonentage = alleMietzeitraeume.reduce(0.0) { sum, m in
             let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-            return sum + (tage * m.anzahlPersonen)
-        } + gesamtLeerstandTage
+            return sum + Double(tage) * m.anzahlPersonen
+        } + Double(gesamtLeerstandTage)
         
-        let gesamtText = "Gesamtmiettage: \(gesamtPersonentage) Personentag(e)"
+        let gesamtText = "Gesamtmiettage: \(formatPersonentagePDF(gesamtPersonentage)) Personentag(e)"
         let gesamtAttributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.boldSystemFont(ofSize: 10)
         ]
@@ -315,12 +333,12 @@ struct PDFGenerator {
                 hauptmieterAttributedString.draw(in: hauptmieterRect)
                 currentY += 14
                 
-                let gesamtPersonentageHauptmieter = zeitraeume.reduce(0) { sum, m in
+                let gesamtPersonentageHauptmieter = zeitraeume.reduce(0.0) { sum, m in
                     let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-                    return sum + (tage * m.anzahlPersonen)
+                    return sum + Double(tage) * m.anzahlPersonen
                 }
                 
-                let gesamtHauptmieterText = "Gesamt: \(gesamtPersonentageHauptmieter) Personentag(e)"
+                let gesamtHauptmieterText = "Gesamt: \(formatPersonentagePDF(gesamtPersonentageHauptmieter)) Personentag(e)"
                 let gesamtHauptmieterAttributes: [NSAttributedString.Key: Any] = [
                     .font: UIFont.systemFont(ofSize: 9)
                 ]
@@ -338,7 +356,8 @@ struct PDFGenerator {
                     }
                     
                     let tage = calculateDays(from: mietzeitraum.vonDatum, to: mietzeitraum.bisDatum)
-                    let personentage = tage * mietzeitraum.anzahlPersonen
+                    let personentage = Double(tage) * mietzeitraum.anzahlPersonen
+                    let personenText = mietzeitraum.personenBeschreibung.map { " (\($0))" } ?? ""
                     
                     let dateFormatter = DateFormatter()
                     dateFormatter.dateFormat = "dd.MM.yyyy"
@@ -349,7 +368,7 @@ struct PDFGenerator {
                     let vonStr = dateFormatter.string(from: vonDate)
                     let bisStr = dateFormatter.string(from: bisDate)
                     
-                    let zeitraumText = "\(vonStr) - \(bisStr): \(tage) Tag(e) × \(mietzeitraum.anzahlPersonen) Person(en) = \(personentage) Personentag(e)"
+                    let zeitraumText = "\(vonStr) - \(bisStr): \(tage) Tag(e) × \(formatPersonenAnzahlPDF(mietzeitraum.anzahlPersonen)) \(personenEinheitAnzeigePDF(mietzeitraum.anzahlPersonen))\(personenText) = \(formatPersonentagePDF(personentage)) Personentag(e)"
                     let zeitraumAttributes: [NSAttributedString.Key: Any] = [
                         .font: UIFont.systemFont(ofSize: 8)
                     ]
@@ -411,11 +430,11 @@ struct PDFGenerator {
         mitmieter: [Int64: [Mitmieter]],
         zaehlerstaende: [Zaehlerstand],
         kosten: [Kosten],
-        gesamtPersonentage: Int,
+        gesamtPersonentage: Double,
         gesamtQm: Int,
         gesamtVerbrauch: [String: Double],
         anzahlWohnungen: Int,
-        personentageWohnung: Int,
+        personentageWohnung: Double,
         verbrauchWohnung: [String: Double],
         tageWohnung: Int,
         jahresTage: Int,
@@ -517,12 +536,12 @@ struct PDFGenerator {
                     hauptmieterAttributedString.draw(in: hauptmieterRect)
                     currentY += 17
                     
-                    let gesamtPersonentageHauptmieter = zeitraeume.reduce(0) { sum, m in
+                    let gesamtPersonentageHauptmieter = zeitraeume.reduce(0.0) { sum, m in
                         let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-                        return sum + (tage * m.anzahlPersonen)
+                        return sum + Double(tage) * m.anzahlPersonen
                     }
                     
-                    let gesamtText = "Gesamt: \(gesamtPersonentageHauptmieter) Personentag(e)"
+                    let gesamtText = "Gesamt: \(formatPersonentagePDF(gesamtPersonentageHauptmieter)) Personentag(e)"
                     let gesamtAttributes: [NSAttributedString.Key: Any] = [
                         .font: UIFont.systemFont(ofSize: 10)
                     ]
@@ -547,9 +566,10 @@ struct PDFGenerator {
                         let vonStr = dateFormatter.string(from: vonDate)
                         let bisStr = dateFormatter.string(from: bisDate)
                         let tage = calculateDays(from: mietzeitraum.vonDatum, to: mietzeitraum.bisDatum)
-                        let personentage = tage * mietzeitraum.anzahlPersonen
+                        let personentage = Double(tage) * mietzeitraum.anzahlPersonen
+                        let personenText = mietzeitraum.personenBeschreibung.map { " (\($0))" } ?? ""
                         
-                        let zeitraumText = "Hauptmieter: \(vonStr) - \(bisStr), \(tage) Tag(e), \(mietzeitraum.anzahlPersonen) Person(en), \(personentage) Personentag(e)"
+                        let zeitraumText = "Hauptmieter: \(vonStr) - \(bisStr), \(tage) Tag(e), \(formatPersonenAnzahlPDF(mietzeitraum.anzahlPersonen)) \(personenEinheitAnzeigePDF(mietzeitraum.anzahlPersonen))\(personenText), \(formatPersonentagePDF(personentage)) Personentag(e)"
                         let zeitraumAttributes: [NSAttributedString.Key: Any] = [
                             .font: UIFont.systemFont(ofSize: 9)
                         ]
@@ -831,13 +851,13 @@ struct PDFGenerator {
     
     private static func berechneKostenanteil(
         kostenItem: Kosten,
-        personentageWohnung: Int,
+        personentageWohnung: Double,
         qmWohnung: Int,
         verbrauchWohnung: [String: Double],
         wohnungId: Int64,
         tageWohnung: Int,
         jahresTage: Int,
-        gesamtPersonentage: Int,
+        gesamtPersonentage: Double,
         gesamtQm: Int,
         gesamtVerbrauch: [String: Double],
         anzahlWohnungen: Int
@@ -845,7 +865,7 @@ struct PDFGenerator {
         switch kostenItem.verteilungsart {
         case .nachPersonen:
             if gesamtPersonentage > 0 {
-                return (kostenItem.betrag / Double(gesamtPersonentage)) * Double(personentageWohnung)
+                return (kostenItem.betrag / gesamtPersonentage) * personentageWohnung
             }
             return 0
             
@@ -907,19 +927,19 @@ struct PDFGenerator {
     
     private static func berechneFormel(
         kostenItem: Kosten,
-        personentageWohnung: Int,
+        personentageWohnung: Double,
         qmWohnung: Int,
         verbrauchWohnung: [String: Double],
         tageWohnung: Int,
         jahresTage: Int,
-        gesamtPersonentage: Int,
+        gesamtPersonentage: Double,
         gesamtQm: Int,
         gesamtVerbrauch: [String: Double],
         anzahlWohnungen: Int
     ) -> String {
         switch kostenItem.verteilungsart {
         case .nachPersonen:
-            return "\(String(format: "%.2f", kostenItem.betrag)) € / \(gesamtPersonentage) Personentage × \(personentageWohnung) Personentage"
+            return "\(String(format: "%.2f", kostenItem.betrag)) € / \(formatPersonentagePDF(gesamtPersonentage)) Personentage × \(formatPersonentagePDF(personentageWohnung)) Personentage"
             
         case .nachQm:
             let zeitanteil = jahresTage > 0 ? Double(tageWohnung) / Double(jahresTage) : 0

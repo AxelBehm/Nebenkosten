@@ -32,6 +32,28 @@ private func isoToDeDatum(_ s: String) -> String? {
     return deDateFormatter.string(from: d)
 }
 
+/// Parst Dezimalzahl mit Komma oder Punkt (z. B. 2,3 oder 2.3)
+private func parsePersonenAnzahl(_ text: String) -> Double? {
+    let normalized = text.replacingOccurrences(of: ",", with: ".")
+    return Double(normalized)
+}
+
+/// Formatiert Personenanzahl für Anzeige (2.3 → "2,3", 1.0 → "1")
+private func formatPersonenAnzahl(_ wert: Double) -> String {
+    if wert == floor(wert) {
+        return "\(Int(wert))"
+    }
+    return String(format: "%.1f", wert).replacingOccurrences(of: ".", with: ",")
+}
+
+/// Einheit für Anzeige: ganze Zahl → Person/Personen, Dezimal → Personenanteil
+private func personenEinheitAnzeige(_ wert: Double) -> String {
+    if wert == floor(wert) {
+        return wert == 1 ? "Person" : "Personen"
+    }
+    return "Personenanteil"
+}
+
 // Prüft ob ein Jahr gesperrt ist (wenn ein neueres Jahr existiert)
 private func istJahrGesperrt(abrechnung: HausAbrechnung) -> Bool {
     return DatabaseManager.shared.istJahrGesperrt(hausBezeichnung: abrechnung.hausBezeichnung, jahr: abrechnung.abrechnungsJahr)
@@ -389,6 +411,7 @@ private struct AddWohnungSheet: View {
     @State private var vonDatum = Date()
     @State private var bisDatum = Date()
     @State private var anzahlPersonenText = ""
+    @State private var personenBeschreibungText = ""
     @State private var mietendeOption: MietendeOption = .mietendeOffen
     @State private var validierungsFehler: String? = nil
     @State private var showValidierungsFehler = false
@@ -405,7 +428,8 @@ private struct AddWohnungSheet: View {
         let id = UUID()
         var vonDatum: Date
         var bisDatum: Date
-        var anzahlPersonen: Int
+        var anzahlPersonen: Double
+        var personenBeschreibung: String?
         var mietendeOption: MietendeOption
     }
     
@@ -633,7 +657,7 @@ private struct AddWohnungSheet: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("\(isoToDeDatum(m.vonDatum) ?? m.vonDatum) – \(isoToDeDatum(m.bisDatum) ?? m.bisDatum)")
                                         .font(.subheadline.weight(.medium))
-                                    Text("\(m.anzahlPersonen) Person\(m.anzahlPersonen == 1 ? "" : "en")")
+                                    Text("\(formatPersonenAnzahl(m.anzahlPersonen)) \(personenEinheitAnzeige(m.anzahlPersonen))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                     if m.mietendeOption == .gekuendigtZumMietzeitende {
@@ -648,7 +672,8 @@ private struct AddWohnungSheet: View {
                                         editingMietzeitraum = m
                                         vonDatum = isoToDate(m.vonDatum) ?? jahrStart
                                         bisDatum = isoToDate(m.bisDatum) ?? jahrEnde
-                                        anzahlPersonenText = String(m.anzahlPersonen)
+                                        anzahlPersonenText = formatPersonenAnzahl(m.anzahlPersonen)
+                                        personenBeschreibungText = m.personenBeschreibung ?? ""
                                         mietendeOption = m.mietendeOption
                                         showAddMietzeitraum = true
                                     } label: { Label("Bearbeiten", systemImage: "pencil") }
@@ -680,6 +705,7 @@ private struct AddWohnungSheet: View {
                             }
                             bisDatum = jahrEnde
                             anzahlPersonenText = "1"
+                            personenBeschreibungText = ""
                             mietendeOption = .mietendeOffen
                             showAddMietzeitraum = true
                         } label: {
@@ -692,7 +718,7 @@ private struct AddWohnungSheet: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("\(isoToDeDatum(dateToISO(m.vonDatum)) ?? dateToISO(m.vonDatum)) – \(isoToDeDatum(dateToISO(m.bisDatum)) ?? dateToISO(m.bisDatum))")
                                         .font(.subheadline.weight(.medium))
-                                    Text("\(m.anzahlPersonen) Person\(m.anzahlPersonen == 1 ? "" : "en")")
+                                    Text("\(formatPersonenAnzahl(m.anzahlPersonen)) \(personenEinheitAnzeige(m.anzahlPersonen))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                     if m.mietendeOption == .gekuendigtZumMietzeitende {
@@ -707,7 +733,8 @@ private struct AddWohnungSheet: View {
                                         editingMietzeitraumTemp = m
                                         vonDatum = m.vonDatum
                                         bisDatum = m.bisDatum
-                                        anzahlPersonenText = String(m.anzahlPersonen)
+                                        anzahlPersonenText = formatPersonenAnzahl(m.anzahlPersonen)
+                                        personenBeschreibungText = m.personenBeschreibung ?? ""
                                         mietendeOption = m.mietendeOption
                                         showAddMietzeitraum = true
                                     } label: { Label("Bearbeiten", systemImage: "pencil") }
@@ -750,13 +777,14 @@ private struct AddWohnungSheet: View {
                             }
                             bisDatum = jahrEnde
                             anzahlPersonenText = "1"
+                            personenBeschreibungText = ""
                             mietendeOption = .mietendeOffen
                             showAddMietzeitraum = true
                         } label: {
                             Label("Mietzeitraum hinzufügen", systemImage: "plus.circle")
                         }
                     }
-        } header: {
+                } header: {
             Label("Mietzeiträume", systemImage: "calendar")
         } footer: {
             if !isEdit && neueMietzeitraeume.isEmpty {
@@ -797,6 +825,7 @@ private struct AddWohnungSheet: View {
             vonDatum: $vonDatum,
             bisDatum: $bisDatum,
             anzahlPersonenText: $anzahlPersonenText,
+            personenBeschreibungText: $personenBeschreibungText,
             mietendeOption: $mietendeOption,
             isEdit: editingMietzeitraum != nil || editingMietzeitraumTemp != nil,
             onSave: { dismiss in
@@ -823,10 +852,15 @@ private struct AddWohnungSheet: View {
             return
         }
         
-        let anzahl = Int(anzahlPersonenText) ?? 0
-        
-        if anzahl <= 0 {
-            validierungsFehler = "Die Anzahl Personen muss größer als 0 sein."
+        guard let anzahl = parsePersonenAnzahl(anzahlPersonenText), anzahl > 0 else {
+            validierungsFehler = "Der Personenanteil muss größer als 0 sein (z. B. 2 oder 2,3)."
+            showValidierungsFehler = true
+            return
+        }
+        let beschreibung = personenBeschreibungText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let istDezimal = anzahl != floor(anzahl)
+        if istDezimal && beschreibung.isEmpty {
+            validierungsFehler = "Bei Dezimalwerten (z. B. 2,3) ist eine Beschreibung der Personenzusammensetzung erforderlich (erscheint in der Abrechnung)."
             showValidierungsFehler = true
             return
         }
@@ -892,6 +926,7 @@ private struct AddWohnungSheet: View {
                 }
             }
             
+            let personenBeschreibung = beschreibung.isEmpty ? nil : beschreibung
             if let e = editingMietzeitraum {
                 _ = DatabaseManager.shared.updateMietzeitraum(Mietzeitraum(
                     id: e.id, wohnungId: w.id,
@@ -899,6 +934,7 @@ private struct AddWohnungSheet: View {
                     hauptmieterName: wohnung?.name ?? "",
                     vonDatum: vonDatumISO, bisDatum: bisDatumISO,
                     anzahlPersonen: anzahl,
+                    personenBeschreibung: personenBeschreibung,
                     mietendeOption: mietendeOption
                 ))
             } else {
@@ -908,6 +944,7 @@ private struct AddWohnungSheet: View {
                     hauptmieterName: wohnung?.name ?? "",
                     vonDatum: vonDatumISO, bisDatum: bisDatumISO,
                     anzahlPersonen: anzahl,
+                    personenBeschreibung: personenBeschreibung,
                     mietendeOption: mietendeOption
                 ))
             }
@@ -946,12 +983,14 @@ private struct AddWohnungSheet: View {
             }
             
             // Speichere temporären Mietzeitraum
+            let personenBeschreibung = beschreibung.isEmpty ? nil : beschreibung
             if let editing = editingMietzeitraumTemp {
                 if let index = neueMietzeitraeume.firstIndex(where: { $0.id == editing.id }) {
                     neueMietzeitraeume[index] = MietzeitraumTemp(
                         vonDatum: vonDatum,
                         bisDatum: bisDatum,
                         anzahlPersonen: anzahl,
+                        personenBeschreibung: personenBeschreibung,
                         mietendeOption: mietendeOption
                     )
                 }
@@ -960,6 +999,7 @@ private struct AddWohnungSheet: View {
                     vonDatum: vonDatum,
                     bisDatum: bisDatum,
                     anzahlPersonen: anzahl,
+                    personenBeschreibung: personenBeschreibung,
                     mietendeOption: mietendeOption
                 ))
             }
@@ -1092,6 +1132,7 @@ private struct AddWohnungSheet: View {
                     vonDatum: vonDatumISO,
                     bisDatum: bisDatumISO,
                     anzahlPersonen: temp.anzahlPersonen,
+                    personenBeschreibung: temp.personenBeschreibung,
                     mietendeOption: temp.mietendeOption
                 ))
             }
@@ -1119,6 +1160,7 @@ private struct AddMietzeitraumSheet: View {
     @Binding var vonDatum: Date
     @Binding var bisDatum: Date
     @Binding var anzahlPersonenText: String
+    @Binding var personenBeschreibungText: String
     @Binding var mietendeOption: MietendeOption
     let isEdit: Bool
     let onSave: (@escaping () -> Void) -> Void
@@ -1136,9 +1178,12 @@ private struct AddMietzeitraumSheet: View {
     }
     
     private var isValidInput: Bool {
-        let anzahlValid = !anzahlPersonenText.isEmpty && Int(anzahlPersonenText) != nil && (Int(anzahlPersonenText) ?? 0) > 0
+        guard let anzahl = parsePersonenAnzahl(anzahlPersonenText), anzahl > 0 else { return false }
         let datumOrderValid = vonDatum <= bisDatum
-        return anzahlValid && datumOrderValid
+        let beschreibung = personenBeschreibungText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let istDezimal = anzahl != floor(anzahl)
+        let beschreibungOk = !istDezimal || !beschreibung.isEmpty
+        return datumOrderValid && beschreibungOk
     }
     
     var body: some View {
@@ -1157,8 +1202,11 @@ private struct AddMietzeitraumSheet: View {
                         .environment(\.locale, Locale(identifier: "de_DE"))
                     DatePicker("Bis", selection: $bisDatum, in: jahrStart...jahrEnde, displayedComponents: .date)
                         .environment(\.locale, Locale(identifier: "de_DE"))
-                    TextField("Anzahl Personen", text: $anzahlPersonenText)
-                        .keyboardType(.numberPad)
+                    TextField("Personenanteil (z. B. 2 oder 2,3)", text: $anzahlPersonenText)
+                        .keyboardType(.decimalPad)
+                    if let anzahl = parsePersonenAnzahl(anzahlPersonenText), anzahl != floor(anzahl) {
+                        PersonenBeschreibungMitVorschlaegenView(text: $personenBeschreibungText)
+                    }
                     Picker("Mietende", selection: $mietendeOption) {
                         ForEach(MietendeOption.allCases, id: \.self) { opt in
                             Text(opt.anzeigeText).tag(opt)

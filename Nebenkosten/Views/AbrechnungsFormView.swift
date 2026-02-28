@@ -67,6 +67,23 @@ private func formatGermanDate(_ isoString: String) -> String {
     return deDateFormatter.string(from: date)
 }
 
+private func formatPersonenAnzahlAbrechnung(_ wert: Double) -> String {
+    if wert == floor(wert) { return "\(Int(wert))" }
+    return String(format: "%.1f", wert).replacingOccurrences(of: ".", with: ",")
+}
+private func formatPersonentage(_ wert: Double) -> String {
+    if wert == floor(wert) { return "\(Int(wert))" }
+    return String(format: "%.1f", wert).replacingOccurrences(of: ".", with: ",")
+}
+
+/// Einheit für Anzeige: ganze Zahl → Person/Personen, Dezimal → Personenanteil
+private func personenEinheitAnzeigeAbrechnung(_ wert: Double) -> String {
+    if wert == floor(wert) {
+        return wert == 1 ? "Person" : "Personen"
+    }
+    return "Personenanteil"
+}
+
 private func calculateDays(from: String, to: String) -> Int {
     guard let fromDate = isoToDate(from),
           let toDate = isoToDate(to) else { return 0 }
@@ -620,16 +637,16 @@ struct AbrechnungsFormView: View {
                 
                 // Berechne Gesamtmiettage aus Personentagen (inkl. Leerstände)
                 let gesamtLeerstandTage = alleLeerstaende.reduce(0) { $0 + $1.tage }
-                let gesamtPersonentage = alleMietzeitraeume.reduce(0) { sum, m in
+                let gesamtPersonentage = alleMietzeitraeume.reduce(0.0) { sum, m in
                     let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-                    return sum + (tage * m.anzahlPersonen)
-                } + gesamtLeerstandTage
+                    return sum + Double(tage) * m.anzahlPersonen
+                } + Double(gesamtLeerstandTage)
                 
                 HStack {
                     Text("Gesamtmiettage:")
                         .fontWeight(.medium)
                     Spacer()
-                    Text("\(gesamtPersonentage) Personentag(e)")
+                    Text("\(formatPersonentage(gesamtPersonentage)) Personentag(e)")
                         .fontWeight(.bold)
                         .font(.title3)
                 }
@@ -654,9 +671,9 @@ struct AbrechnungsFormView: View {
     
     private func mietzeitraumGruppeView(hauptmieterName: String, zeitraeume: [Mietzeitraum]) -> some View {
         // Berechne Werte außerhalb des View-Builders
-        let gesamtPersonentage = zeitraeume.reduce(0) { sum, m in
+        let gesamtPersonentage = zeitraeume.reduce(0.0) { sum, m in
             let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-            return sum + (tage * m.anzahlPersonen)
+            return sum + Double(tage) * m.anzahlPersonen
         }
         let gesamtTageHauptmieter = zeitraeume.reduce(0) { sum, m in
             sum + calculateDays(from: m.vonDatum, to: m.bisDatum)
@@ -667,7 +684,7 @@ struct AbrechnungsFormView: View {
                 Text(hauptmieterName)
                     .fontWeight(.semibold)
                 Spacer()
-                Text("Gesamt: \(gesamtTageHauptmieter) Tag(e) • \(gesamtPersonentage) Personentag(e)")
+                Text("Gesamt: \(gesamtTageHauptmieter) Tag(e) • \(formatPersonentage(gesamtPersonentage)) Personentag(e)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -683,7 +700,7 @@ struct AbrechnungsFormView: View {
     
     private func einzelnerMietzeitraumView(mietzeitraum: Mietzeitraum) -> some View {
         let tage = calculateDays(from: mietzeitraum.vonDatum, to: mietzeitraum.bisDatum)
-        let personentage = tage * mietzeitraum.anzahlPersonen
+        let personentage = Double(tage) * mietzeitraum.anzahlPersonen
         
         return VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top) {
@@ -692,9 +709,9 @@ struct AbrechnungsFormView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("\(tage) Tag(e)")
                         .foregroundStyle(.blue)
-                    Text("• \(mietzeitraum.anzahlPersonen) Person(en)")
+                    Text("• \(formatPersonenAnzahlAbrechnung(mietzeitraum.anzahlPersonen)) \(personenEinheitAnzeigeAbrechnung(mietzeitraum.anzahlPersonen))\(mietzeitraum.personenBeschreibung.map { " (\($0))" } ?? "")")
                         .foregroundStyle(.secondary)
-                    Text("= \(personentage) Personentag(e)")
+                    Text("= \(formatPersonentage(personentage)) Personentag(e)")
                         .fontWeight(.medium)
                         .foregroundStyle(.green)
                 }
@@ -789,9 +806,9 @@ struct AbrechnungsFormView: View {
     private func wohnungCard(wohnung: Wohnung) -> some View {
         // Berechne Personentage für diese Wohnung
         let mietzeitraeumeFuerWohnung = mietzeitraeume[wohnung.id] ?? []
-        let personentageWohnung = mietzeitraeumeFuerWohnung.reduce(0) { sum, m in
+        let personentageWohnung = mietzeitraeumeFuerWohnung.reduce(0.0) { sum, m in
             let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-            return sum + (tage * m.anzahlPersonen)
+            return sum + Double(tage) * m.anzahlPersonen
         }
         
         // Berechne Tage pro Wohnung (bezogen auf 1 Person)
@@ -838,13 +855,13 @@ struct AbrechnungsFormView: View {
     
     // MARK: - Helper Functions
     
-    private var gesamtPersonentage: Int {
+    private var gesamtPersonentage: Double {
         let alleMietzeitraeume = wohnungen.flatMap { mietzeitraeume[$0.id] ?? [] }
         let gesamtLeerstandTage = alleLeerstaende.reduce(0) { $0 + $1.tage }
-        return alleMietzeitraeume.reduce(0) { sum, m in
+        return alleMietzeitraeume.reduce(0.0) { sum, m in
             let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-            return sum + (tage * m.anzahlPersonen)
-        } + gesamtLeerstandTage
+            return sum + Double(tage) * m.anzahlPersonen
+        } + Double(gesamtLeerstandTage)
     }
     
     private func berechneVerbrauchProTyp(zaehlerstaende: [Zaehlerstand]) -> [String: Double] {
@@ -921,11 +938,11 @@ struct WohnungAbrechnungsCard: View {
     let mitmieter: [Int64: [Mitmieter]] // MietzeitraumId -> Mitmieter
     let zaehlerstaende: [Zaehlerstand]
     let kosten: [Kosten]
-    let gesamtPersonentage: Int
+    let gesamtPersonentage: Double
     let gesamtQm: Int
     let gesamtVerbrauch: [String: Double] // Zählertyp -> Gesamtverbrauch
     let anzahlWohnungen: Int
-    let personentageWohnung: Int
+    let personentageWohnung: Double
     let verbrauchWohnung: [String: Double] // Zählertyp -> Verbrauch dieser Wohnung
     let tageWohnung: Int // Tage pro Wohnung (bezogen auf 1 Person)
     let jahresTage: Int // Jahresanzahl der Tage (365 oder 366)
@@ -1060,9 +1077,9 @@ struct WohnungAbrechnungsCard: View {
     
     private func mietzeitraumGruppeView(hauptmieterName: String, zeitraeume: [Mietzeitraum]) -> some View {
         // Berechne Werte außerhalb des View-Builders
-        let gesamtPersonentage = zeitraeume.reduce(0) { sum, m in
+        let gesamtPersonentage = zeitraeume.reduce(0.0) { sum, m in
             let tage = calculateDays(from: m.vonDatum, to: m.bisDatum)
-            return sum + (tage * m.anzahlPersonen)
+            return sum + Double(tage) * m.anzahlPersonen
         }
         
         return VStack(alignment: .leading, spacing: 6) {
@@ -1070,7 +1087,7 @@ struct WohnungAbrechnungsCard: View {
                 Text(hauptmieterName)
                     .fontWeight(.semibold)
                 Spacer()
-                Text("Gesamt: \(gesamtPersonentage) Personentag(e)")
+                Text("Gesamt: \(formatPersonentage(gesamtPersonentage)) Personentag(e)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1088,7 +1105,7 @@ struct WohnungAbrechnungsCard: View {
     
     private func mietzeitraumDetailView(mietzeitraum: Mietzeitraum) -> some View {
         let tage = calculateDays(from: mietzeitraum.vonDatum, to: mietzeitraum.bisDatum)
-        let personentage = tage * mietzeitraum.anzahlPersonen
+        let personentage = Double(tage) * mietzeitraum.anzahlPersonen
         
         return VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top) {
@@ -1097,9 +1114,9 @@ struct WohnungAbrechnungsCard: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("\(tage) Tag(e)")
                         .foregroundStyle(.blue)
-                    Text("• \(mietzeitraum.anzahlPersonen) Person(en)")
+                    Text("• \(formatPersonenAnzahlAbrechnung(mietzeitraum.anzahlPersonen)) \(personenEinheitAnzeigeAbrechnung(mietzeitraum.anzahlPersonen))\(mietzeitraum.personenBeschreibung.map { " (\($0))" } ?? "")")
                         .foregroundStyle(.secondary)
-                    Text("= \(personentage) Personentag(e)")
+                    Text("= \(formatPersonentage(personentage)) Personentag(e)")
                         .fontWeight(.medium)
                         .foregroundStyle(.green)
                 }
@@ -1490,7 +1507,7 @@ struct WohnungAbrechnungsCard: View {
     // MARK: - Helper Functions
     private func berechneKostenanteil(
         kostenItem: Kosten,
-        personentageWohnung: Int,
+        personentageWohnung: Double,
         qmWohnung: Int,
         verbrauchWohnung: [String: Double],
         wohnungId: Int64,
@@ -1501,7 +1518,7 @@ struct WohnungAbrechnungsCard: View {
         case .nachPersonen:
             // Wert / Gesamtmiettage * Personentage des Mieters
             if gesamtPersonentage > 0 {
-                return (kostenItem.betrag / Double(gesamtPersonentage)) * Double(personentageWohnung)
+                return (kostenItem.betrag / gesamtPersonentage) * personentageWohnung
             }
             return 0
             
@@ -1573,7 +1590,7 @@ struct WohnungAbrechnungsCard: View {
     // Berechne Formel für die Anzeige
     private func berechneFormel(
         kostenItem: Kosten,
-        personentageWohnung: Int,
+        personentageWohnung: Double,
         qmWohnung: Int,
         verbrauchWohnung: [String: Double],
         tageWohnung: Int,
@@ -1581,7 +1598,7 @@ struct WohnungAbrechnungsCard: View {
     ) -> String {
         switch kostenItem.verteilungsart {
         case .nachPersonen:
-            return "\(String(format: "%.2f", kostenItem.betrag)) € / \(gesamtPersonentage) Personentage × \(personentageWohnung) Personentage"
+            return "\(String(format: "%.2f", kostenItem.betrag)) € / \(formatPersonentage(gesamtPersonentage)) Personentage × \(formatPersonentage(personentageWohnung)) Personentage"
             
         case .nachQm:
             let zeitanteil = jahresTage > 0 ? Double(tageWohnung) / Double(jahresTage) : 0

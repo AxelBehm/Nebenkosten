@@ -52,6 +52,25 @@ private func isoToDeDatum(_ s: String) -> String? {
     return deDateFormatter.string(from: d)
 }
 
+/// Parst Dezimalzahl mit Komma oder Punkt (z. B. 2,3 oder 2.3)
+private func parsePersonenAnzahlDetail(_ text: String) -> Double? {
+    let normalized = text.replacingOccurrences(of: ",", with: ".")
+    return Double(normalized)
+}
+/// Formatiert Personenanzahl für Anzeige
+private func formatPersonenAnzahlDetail(_ wert: Double) -> String {
+    if wert == floor(wert) { return "\(Int(wert))" }
+    return String(format: "%.1f", wert).replacingOccurrences(of: ".", with: ",")
+}
+
+/// Einheit für Anzeige: ganze Zahl → Person/Personen, Dezimal → Personenanteil
+private func personenEinheitAnzeigeDetail(_ wert: Double) -> String {
+    if wert == floor(wert) {
+        return wert == 1 ? "Person" : "Personen"
+    }
+    return "Personenanteil"
+}
+
 // Prüft ob ein Jahr gesperrt ist (wenn ein neueres Jahr existiert)
 private func istJahrGesperrt(abrechnung: HausAbrechnung) -> Bool {
     return DatabaseManager.shared.istJahrGesperrt(hausBezeichnung: abrechnung.hausBezeichnung, jahr: abrechnung.abrechnungsJahr)
@@ -91,8 +110,8 @@ struct WohnungDetailView: View {
     @State private var jahr = Calendar.current.component(.year, from: Date())
     @State private var vonDatum = Date()
     @State private var bisDatum = Date()
-    @State private var anzahlPersonen: Int? = nil
     @State private var anzahlPersonenText = ""
+    @State private var personenBeschreibungText = ""
     @State private var mietendeOption: MietendeOption = .mietendeOffen
     @State private var validierungsFehler: String? = nil
     @State private var showValidierungsFehler = false
@@ -188,6 +207,7 @@ struct WohnungDetailView: View {
                 vonDatum: $vonDatum,
                 bisDatum: $bisDatum,
                 anzahlPersonenText: $anzahlPersonenText,
+                personenBeschreibungText: $personenBeschreibungText,
                 mietendeOption: $mietendeOption,
                 isEdit: item.isEdit,
                 onSave: { dismiss in
@@ -264,16 +284,22 @@ struct WohnungDetailView: View {
                         }
                     }
                     
-                    let anzahl = Int(anzahlPersonenText) ?? 0
-                    
-                    if anzahl <= 0 {
-                        validierungsFehler = "Die Anzahl Personen muss größer als 0 sein."
+                    guard let anzahl = parsePersonenAnzahlDetail(anzahlPersonenText), anzahl > 0 else {
+                        validierungsFehler = "Der Personenanteil muss größer als 0 sein (z. B. 2 oder 2,3)."
+                        showValidierungsFehler = true
+                        return
+                    }
+                    let beschreibung = personenBeschreibungText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let istDezimal = anzahl != floor(anzahl)
+                    if istDezimal && beschreibung.isEmpty {
+                        validierungsFehler = "Bei Dezimalwerten (z. B. 2,3) ist eine Beschreibung der Personenzusammensetzung erforderlich (erscheint in der Abrechnung)."
                         showValidierungsFehler = true
                         return
                     }
                     
                     // Verwende immer das Abrechnungsjahr
                     let speicherJahr = haus.abrechnungsJahr
+                    let personenBeschreibung = beschreibung.isEmpty ? nil : beschreibung
                     
                     if let e = editingMietzeitraum {
                         _ = DatabaseManager.shared.updateMietzeitraum(Mietzeitraum(
@@ -282,6 +308,7 @@ struct WohnungDetailView: View {
                             hauptmieterName: wohnung.name ?? "",
                             vonDatum: vonDatumISO, bisDatum: bisDatumISO,
                             anzahlPersonen: anzahl,
+                            personenBeschreibung: personenBeschreibung,
                             mietendeOption: mietendeOption
                         ))
                     } else {
@@ -291,6 +318,7 @@ struct WohnungDetailView: View {
                             hauptmieterName: wohnung.name ?? "",
                             vonDatum: vonDatumISO, bisDatum: bisDatumISO,
                             anzahlPersonen: anzahl,
+                            personenBeschreibung: personenBeschreibung,
                             mietendeOption: mietendeOption
                         ))
                     }
@@ -459,7 +487,7 @@ struct WohnungDetailView: View {
                     Text("\(m.vonDatum) – \(m.bisDatum)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("\(m.anzahlPersonen) Person\(m.anzahlPersonen == 1 ? "" : "en")")
+                    Text("\(formatPersonenAnzahlDetail(m.anzahlPersonen)) \(personenEinheitAnzeigeDetail(m.anzahlPersonen))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     if m.mietendeOption == .gekuendigtZumMietzeitende {
@@ -809,6 +837,7 @@ private struct AddMietzeitraumSheetWithFotos: View {
     @Binding var vonDatum: Date
     @Binding var bisDatum: Date
     @Binding var anzahlPersonenText: String
+    @Binding var personenBeschreibungText: String
     @Binding var mietendeOption: MietendeOption
     let isEdit: Bool
     let onSave: (@escaping () -> Void) -> Void
@@ -823,6 +852,7 @@ private struct AddMietzeitraumSheetWithFotos: View {
         vonDatum: Binding<Date>,
         bisDatum: Binding<Date>,
         anzahlPersonenText: Binding<String>,
+        personenBeschreibungText: Binding<String>,
         mietendeOption: Binding<MietendeOption>,
         isEdit: Bool,
         onSave: @escaping (@escaping () -> Void) -> Void,
@@ -835,6 +865,7 @@ private struct AddMietzeitraumSheetWithFotos: View {
         self._vonDatum = vonDatum
         self._bisDatum = bisDatum
         self._anzahlPersonenText = anzahlPersonenText
+        self._personenBeschreibungText = personenBeschreibungText
         self._mietendeOption = mietendeOption
         self.isEdit = isEdit
         self.onSave = onSave
@@ -853,12 +884,12 @@ private struct AddMietzeitraumSheetWithFotos: View {
     }
     
     private var isValidInput: Bool {
-        // Hauptmieter-Name wird nicht mehr geprüft, da er nur angezeigt wird
-        let anzahlValid = !anzahlPersonenText.isEmpty && Int(anzahlPersonenText) != nil && (Int(anzahlPersonenText) ?? 0) > 0
-        // Die DatePicker begrenzen bereits die Auswahl, daher sind die Daten immer gültig wenn sie gesetzt sind
+        guard let anzahl = parsePersonenAnzahlDetail(anzahlPersonenText), anzahl > 0 else { return false }
         let datumOrderValid = vonDatum <= bisDatum
-        
-        return anzahlValid && datumOrderValid
+        let beschreibung = personenBeschreibungText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let istDezimal = anzahl != floor(anzahl)
+        let beschreibungOk = !istDezimal || !beschreibung.isEmpty
+        return datumOrderValid && beschreibungOk
     }
     
     var body: some View {
@@ -875,8 +906,11 @@ private struct AddMietzeitraumSheetWithFotos: View {
                     }
                     DatePicker("Von", selection: $vonDatum, in: jahrStart...jahrEnde, displayedComponents: .date)
                     DatePicker("Bis", selection: $bisDatum, in: jahrStart...jahrEnde, displayedComponents: .date)
-                    TextField("Anzahl Personen", text: $anzahlPersonenText)
-                        .keyboardType(.numberPad)
+                    TextField("Personenanteil (z. B. 2 oder 2,3)", text: $anzahlPersonenText)
+                        .keyboardType(.decimalPad)
+                    if let anzahl = parsePersonenAnzahlDetail(anzahlPersonenText), anzahl != floor(anzahl) {
+                        PersonenBeschreibungMitVorschlaegenView(text: $personenBeschreibungText)
+                    }
                     Picker("Mietende", selection: $mietendeOption) {
                         ForEach(MietendeOption.allCases, id: \.self) { opt in
                             Text(opt.anzeigeText).tag(opt)

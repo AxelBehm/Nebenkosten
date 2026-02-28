@@ -34,12 +34,14 @@ struct Mietzeitraum: Identifiable, Codable, Equatable {
     let vonDatum: String
     /// Ende des Mietzeitraums (ISO YYYY-MM-DD)
     let bisDatum: String
-    /// Anzahl der Personen im Mietzeitraum (Pflichtfeld)
-    let anzahlPersonen: Int
+    /// Anzahl der Personen im Mietzeitraum (Pflichtfeld) – Dezimal erlaubt, z. B. 2,3
+    let anzahlPersonen: Double
+    /// Beschreibung der Personenzusammensetzung (Pflicht bei Dezimalwerten, z. B. „1 Bewohner, 1 Kind Wechselmodell“)
+    let personenBeschreibung: String?
     /// Mietende-Status: offen oder gekündigt zum Mietzeitende
     let mietendeOption: MietendeOption
     
-    init(id: Int64 = 0, wohnungId: Int64, jahr: Int, hauptmieterName: String, vonDatum: String, bisDatum: String, anzahlPersonen: Int, mietendeOption: MietendeOption = .mietendeOffen) {
+    init(id: Int64 = 0, wohnungId: Int64, jahr: Int, hauptmieterName: String, vonDatum: String, bisDatum: String, anzahlPersonen: Double, personenBeschreibung: String? = nil, mietendeOption: MietendeOption = .mietendeOffen) {
         self.id = id
         self.wohnungId = wohnungId
         self.jahr = jahr
@@ -47,6 +49,7 @@ struct Mietzeitraum: Identifiable, Codable, Equatable {
         self.vonDatum = vonDatum
         self.bisDatum = bisDatum
         self.anzahlPersonen = anzahlPersonen
+        self.personenBeschreibung = personenBeschreibung
         self.mietendeOption = mietendeOption
     }
     
@@ -58,7 +61,14 @@ struct Mietzeitraum: Identifiable, Codable, Equatable {
         hauptmieterName = try c.decode(String.self, forKey: .hauptmieterName)
         vonDatum = try c.decode(String.self, forKey: .vonDatum)
         bisDatum = try c.decode(String.self, forKey: .bisDatum)
-        anzahlPersonen = try c.decodeIfPresent(Int.self, forKey: .anzahlPersonen) ?? 1
+        if let d = try c.decodeIfPresent(Double.self, forKey: .anzahlPersonen) {
+            anzahlPersonen = d
+        } else if let i = try c.decodeIfPresent(Int.self, forKey: .anzahlPersonen) {
+            anzahlPersonen = Double(i)
+        } else {
+            anzahlPersonen = 1.0
+        }
+        personenBeschreibung = try c.decodeIfPresent(String.self, forKey: .personenBeschreibung)
         mietendeOption = (try c.decodeIfPresent(MietendeOption.self, forKey: .mietendeOption)) ?? .mietendeOffen
     }
 }

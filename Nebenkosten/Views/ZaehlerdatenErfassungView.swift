@@ -28,6 +28,16 @@ private func isoToDeDatum(_ s: String) -> String? {
     return deDateFormatter.string(from: d)
 }
 
+private func formatPersonenAnteilZaehler(_ wert: Double) -> String {
+    if wert == floor(wert) { return "\(Int(wert))" }
+    return String(format: "%.1f", wert).replacingOccurrences(of: ".", with: ",")
+}
+
+private func personenEinheitKurzZaehler(_ wert: Double) -> String {
+    if wert == floor(wert) { return "Pers." }
+    return "Pers.-Ant."
+}
+
 struct ZaehlerdatenErfassungView: View {
     let abrechnung: HausAbrechnung
     @State private var wohnungen: [Wohnung] = []
@@ -127,7 +137,7 @@ private struct ZaehlerdatenWohnungRow: View {
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
                                     }
-                                    Text("· \(m.anzahlPersonen) Pers.")
+                                    Text("· \(formatPersonenAnteilZaehler(m.anzahlPersonen)) \(personenEinheitKurzZaehler(m.anzahlPersonen))")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
